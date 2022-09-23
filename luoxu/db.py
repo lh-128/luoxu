@@ -81,13 +81,12 @@ class PostgreStore:
     sql = '''\
         insert into tg_groups
         (group_id, name, pub_id) values
-        ($1,       $2,  $3)
+        ($1, $2)
         returning *'''
     return await conn.fetchrow(
       sql,
       group.id,
-      group.title,
-      group.username,
+      group.title
     )
 
   async def loaded_upto(
