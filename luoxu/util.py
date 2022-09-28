@@ -33,15 +33,15 @@ def run_until_sigint(fu):
       pass
     print('Cancelled.')
 
-def load_config(file):
-  with open(file, 'rb') as f:
+def load_config(file_name):
+  with open(file_name, 'rb') as f:
     return tomli.load(f)
 
-class UpdateLoaded(Enum):
+class UpdateDirection(Enum):
   update_none = auto()
-  update_first = auto()
-  update_last = auto()
-  update_both = auto()
+  update_backward = auto()
+  update_forward = auto()
+  update_bidirectional = auto()
 
 def create_client(tg_config):
   client = TelegramClient(

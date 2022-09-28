@@ -9,10 +9,10 @@ from aiohttp import web
 from telethon.tl.types import User, ChatPhotoEmpty
 from telethon.errors.rpcerrorlist import ChannelPrivateError
 
-from . import util
-from .types import SearchQuery, GroupNotFound
+import util
+from mytypes import SearchCriteria, GroupNotFound
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('luoxu')
 
 class BaseHandler:
   def __init__(self, dbconn):
@@ -46,7 +46,7 @@ def html_or_text(m):
 class SearchHandler(BaseHandler):
   async def _get(self, request):
     try:
-      q = self._parse_query(request.query)
+      q = self._parse_criteria(request.query)
     except Exception:
       raise web.HTTPBadRequest
     try:
@@ -58,8 +58,8 @@ class SearchHandler(BaseHandler):
       'groupinfo': groupinfo,
       'has_more': len(messages) == self.dbconn.SEARCH_LIMIT,
       'messages': [{
-        'id': m['msgid'],
-        'from_id': m['from_user'],
+        'id': m['msg_id'],
+        'from_id': m['from_user_id'],
         'from_name': m['from_user_name'],
         'group_id': m['group_id'],
         'html': html_or_text(m),
@@ -70,7 +70,7 @@ class SearchHandler(BaseHandler):
       'Cache-Control': 'max-age=0',
     })
 
-  def _parse_query(self, query):
+  def _parse_criteria(self, query):
     group = int(query.get('g', 0))
     terms = query.get('q')
     sender = int(query.get('sender', 0))
@@ -80,17 +80,16 @@ class SearchHandler(BaseHandler):
     end = query.get('end')
     if end:
       end = util.fromtimestamp(int(end))
-    return SearchQuery(group, terms, sender, start, end)
+    return SearchCriteria(group, terms, sender, start, end)
 
 class GroupsHandler(BaseHandler):
   async def _get(self, request):
-    groups = await self.dbconn.get_groups()
+    groups = await self.dbconn.get_all_groups()
     gs = [{
       'group_id': str(g['group_id']),
-      'name': g['name'],
-      'pub_id': g['pub_id'],
+      'title': g['title'],
     } for g in groups]
-    gs.sort(key=lambda g: g['name'])
+    gs.sort(key=lambda g: g['title'])
     return web.json_response({
       'groups': gs,
     })
@@ -101,7 +100,7 @@ class NamesHandler(BaseHandler):
     q = request.query['q']
     names = await self.dbconn.find_names(group, q)
     return web.json_response({
-      'names': names,
+      'title': names,
     }, headers = {
       'Cache-Control': 's-maxage=0, max-age=86400',
     })
@@ -190,7 +189,7 @@ def setup_app(
 
 async def run_web(config, port):
   import asyncio
-  from .db import PostgreStore
+  from db import PostgreStore
   db = PostgreStore(config['database'])
   await db.setup()
 
@@ -226,8 +225,6 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--config', default='config.toml',
                       help='config file path')
-  parser.add_argument('--port', type=int,
-                      help='listen on this TCP port')
   args = parser.parse_args()
 
   config = load_config(args.config)

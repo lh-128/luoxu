@@ -66,13 +66,13 @@ class TornadoLogFormatter(logging.Formatter):
       formatted = formatted.rstrip() + "\n" + record.exc_text
     return formatted.replace("\n", "\n    ")
 
-def enable_pretty_logging(level=logging.DEBUG, handler=None, color=None):
+def enable_pretty_logging(level='DEBUG', handler=None, color=None):
   '''
   handler: specify a handler instead of default StreamHandler
   color:   boolean, force color to be on / off. Default to be on only when
            ``handler`` isn't specified and the term supports color
   '''
-  logger = logging.getLogger()
+  logger = logging.getLogger('luoxu')
   if handler is None:
     h = logging.StreamHandler()
   else:
@@ -89,7 +89,16 @@ def enable_pretty_logging(level=logging.DEBUG, handler=None, color=None):
         import traceback
         traceback.print_exc()
   formatter = TornadoLogFormatter(color=color)
-  h.setLevel(level)
+
+  if level == 'INFO':
+    h.setLevel(logging.INFO)
+  elif level == 'WARN':
+    h.setLevel(logging.WARN)
+  elif level == 'ERROR':
+    h.setLevel(logging.ERROR)
+  else:  # all invalid logging level input will be treated as 'DEBUG'
+    h.setLevel(logging.DEBUG)
+
   h.setFormatter(formatter)
   logger.setLevel(level)
   logger.addHandler(h)

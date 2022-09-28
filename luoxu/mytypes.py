@@ -1,8 +1,8 @@
 from typing import NamedTuple, Optional
 import datetime
 
-class SearchQuery(NamedTuple):
-  group: int
+class SearchCriteria(NamedTuple):
+  group_id: int
   terms: Optional[str]
   sender: Optional[str]
   start: Optional[datetime.datetime]

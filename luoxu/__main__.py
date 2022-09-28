@@ -8,15 +8,16 @@ import importlib
 import inspect
 
 from telethon import events
+from telethon.tl.types import User, PeerChat, PeerUser
 from aiohttp import web
 
-from .db import PostgreStore
-from .group import GroupHistoryIndexer
-from .util import load_config, UpdateLoaded, create_client
-from . import web as myweb
-from .ctxvars import msg_source
+from db import PostgreStore
+from group import GroupHistoryIndexer
+from util import load_config, UpdateDirection, create_client, format_name
+import web as myweb
+from ctxvars import msg_source
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('luoxu')
 
 class Indexer:
   def __init__(self, config):
@@ -47,10 +48,11 @@ class Indexer:
     msg = event.message
     dbstore = self.dbstore
 
-    if self.group_forward_history_done.get(msg.peer_id.channel_id, False):
-      update_loaded = UpdateLoaded.update_last
+    chanel_id = msg.peer_id.channel_id if type(msg.peer_id) not in (PeerChat, PeerUser) else msg.peer_id.chat_id
+    if self.group_forward_history_done.get(chanel_id, False):
+      update_loaded = UpdateDirection.update_forward
     else:
-      update_loaded = UpdateLoaded.update_none
+      update_loaded = UpdateDirection.update_none
     await dbstore.insert_messages([msg], update_loaded)
 
     if self.mark_as_read:
@@ -168,17 +170,18 @@ class Indexer:
         pass
 
   async def init_group(self, group):
-    logger.info('init_group: %r', group.title)
+    if type(group) == User:
+      logger.info('init_group: %r', format_name(group))
+    else:
+      logger.info('init_group: %r', group.title)
     async with self.dbstore.get_conn() as conn:
-      return await self.dbstore.insert_group(conn, group)
+      return await self.dbstore.upsert_group(conn, group)
 
 if __name__ == '__main__':
-  from .lib.nicelogger import enable_pretty_logging
-  # enable_pretty_logging('DEBUG')
-  enable_pretty_logging('INFO')
+  from lib.nicelogger import enable_pretty_logging
+  enable_pretty_logging('DEBUG')
 
-  from .util import run_until_sigint
-
+  from util import run_until_sigint
   import argparse
 
   parser = argparse.ArgumentParser()
@@ -186,6 +189,9 @@ if __name__ == '__main__':
                       help='config file path')
   args = parser.parse_args()
 
+  logger.debug('Loading config file %s', args.config)
   config = load_config(args.config)
+  if config.get('log_level'):
+    enable_pretty_logging(config.get('log_level'))
   indexer = Indexer(config)
   run_until_sigint(indexer.run())

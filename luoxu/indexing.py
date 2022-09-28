@@ -7,9 +7,9 @@ import telethon
 import aiohttp
 from telethon.tl import types
 
-from .lib.expiringdict import ExpiringDict
+from lib.expiringdict import ExpiringDict
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('luoxu')
 
 CONVERTERS = [
   OpenCC('s2tw'),

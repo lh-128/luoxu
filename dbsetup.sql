@@ -1,19 +1,25 @@
 create table tg_groups (
   group_id bigint unique not null primary key,
-  name text not null,
-  pub_id text,
+  title text not null,
   loaded_first_id bigint,
   loaded_last_id bigint
 );
 
 create table messages (
   group_id bigint not null references tg_groups (group_id),
-  msgid bigint not null,
-  from_user bigint,
+  msg_id bigint not null,
+  from_user_id bigint,
   from_user_name text not null,
-  text text not null,
+  msg_text text not null,
   created_at timestamp with time zone not null,
-  updated_at timestamp with time zone
+  updated_at timestamp with time zone,
+  reply_to_msg_id bigint,
+  is_fwd boolean,
+  fwd_from_chat_id bigint,
+  fwd_from_chat_post_id bigint,
+  fwd_from_chat_name text,
+  fwd_from_user_id bigint,
+  fwd_from_user_name text
 ) PARTITION BY RANGE (created_at);
 
 CREATE TABLE messages_y2016 PARTITION OF messages
@@ -47,7 +53,7 @@ CREATE TABLE messages_y2023 PARTITION OF messages
 -- and group_id = 1031857103
 -- and created_at > '2022-05-23 14:24'
 -- ORDER BY msgid DESC LIMIT 1000;
-create unique index messages_msgid_idx on messages (group_id, msgid, created_at DESC);
+create unique index messages_msgid_idx on messages (group_id, msg_id, created_at DESC);
 
 -- fulltext search
 -- explain analyze
@@ -73,7 +79,7 @@ create unique index messages_msgid_idx on messages (group_id, msgid, created_at 
 --   Options: Inlining false, Optimization false, Expressions true, Deforming true
 --   Timing: Generation 0.896 ms, Inlining 0.000 ms, Optimization 0.536 ms, Emission 8.271 ms, Total 9.703 ms
 -- Execution Time: 68.963 ms
-CREATE INDEX message_idx ON messages USING pgroonga (text) WITH (tokenizer='TokenNgram("report_source_location", true, "loose_blank", true)');
+CREATE INDEX message_idx ON messages USING pgroonga (msg_text) WITH (tokenizer='TokenNgram("report_source_location", true, "loose_blank", true)');
 
 -- message by sender without search terms
 --
@@ -82,31 +88,29 @@ CREATE INDEX message_idx ON messages USING pgroonga (text) WITH (tokenizer='Toke
 -- CREATE INDEX message_sender_idx ON public.messages USING btree (from_user, created_at DESC);
 
 create table usernames (
-  name text not null,
-  uid bigint[] not null,
+  user_id bigint unique not null primary key,
+  username text not null,
   group_id bigint[] not null,
   last_seen timestamp with time zone not null
 );
 
-CREATE UNIQUE INDEX usernames_uidx ON usernames (name);
-CREATE INDEX usernames_idx ON usernames USING pgroonga (name) WITH (tokenizer='TokenBigramSplitSymbolAlphaDigit');
-
-CREATE FUNCTION array_distinct(anyarray) RETURNS anyarray AS $f$
+CREATE OR REPLACE FUNCTION array_distinct(anyarray) RETURNS anyarray AS $f$
   SELECT array_agg(DISTINCT x) FROM unnest($1) t(x);
 $f$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION update_usernames()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO usernames (name, uid, group_id, last_seen)
-    VALUES (NEW.from_user_name, ARRAY[NEW.from_user], ARRAY[NEW.group_id], NEW.created_at)
-    ON CONFLICT (name) DO UPDATE
+  INSERT INTO usernames (user_id, username, group_id, last_seen)
+    VALUES (NEW.from_user_id, NEW.from_user_name, ARRAY[NEW.group_id], NEW.created_at)
+    ON CONFLICT (user_id) DO UPDATE
       SET last_seen = CASE WHEN usernames.last_seen > NEW.created_at THEN usernames.last_seen ELSE NEW.created_at END,
-          uid = array_distinct(usernames.uid || NEW.from_user),
           group_id = array_distinct(usernames.group_id || NEW.group_id);
   RETURN NEW;
 END;
 $$ LANGUAGE 'plpgsql';
 
-CREATE TRIGGER table_updated AFTER INSERT
-  ON messages FOR EACH ROW EXECUTE PROCEDURE update_usernames();
+CREATE OR REPLACE TRIGGER table_updated AFTER INSERT
+  ON messages FOR EACH ROW
+  WHEN (NEW.from_user_id IS NOT NULL)
+  EXECUTE PROCEDURE update_usernames();

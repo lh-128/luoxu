@@ -4,3 +4,7 @@ local.toml
 *.session-journal
 userdict.txt
 StopWords-simple.txt
+/.vs
+/env
+/luoxu/lib/__pycache__
+/luoxu/__pycache__
